@@ -236,6 +236,238 @@ Password Verification
 Controller
 ```
 
+# 🔐 Authentication Flow Explained
+
+The following diagram shows the overall authentication flow.
+
+```text
+Client
+        │
+Username + Password
+        │
+        ▼
+Spring Security Filter Chain
+        │
+        ▼
+AuthenticationManager
+        │
+        ▼
+DaoAuthenticationProvider
+        │
+        ▼
+MyUserDetailsService
+        │
+loadUserByUsername()
+        │
+        ▼
+UsersRepo
+        │
+        ▼
+PostgreSQL Database
+        │
+        ▼
+Users Entity
+        │
+        ▼
+UserPrincipal
+(UserDetails)
+        │
+        ▼
+DaoAuthenticationProvider
+        │
+Password Verification
+        │
+        ▼
+Controller
+```
+
+---
+
+## 📖 Step-by-Step Story
+
+### 🟢 Step 1 - Client Sends Request
+
+A client calls a secured API, for example:
+
+```http
+GET /students
+```
+
+Since the API is protected, the client also sends a **username** and **password**.
+
+---
+
+### 🛡️ Step 2 - Spring Security Intercepts the Request
+
+Before the request reaches the controller, it is intercepted by the **Spring Security Filter Chain**.
+
+Spring Security checks whether the requested endpoint requires authentication.
+
+Since the endpoint is secured, the request **cannot** directly reach the controller.
+
+---
+
+### 🔍 Step 3 - Authentication Starts
+
+Spring Security delegates the authentication process to the configured:
+
+```text
+DaoAuthenticationProvider
+```
+
+At this point, the provider has the username and password sent by the client.
+
+However, it does **not** know where user information is stored.
+
+It simply follows one rule:
+
+> **"If I need user details, I must ask a `UserDetailsService`."**
+
+---
+
+### 👤 Step 4 - Loading User Details
+
+Since I configured:
+
+```java
+provider.setUserDetailsService(userDetailsService);
+```
+
+Spring injects my implementation:
+
+```text
+MyUserDetailsService
+```
+
+The provider then calls:
+
+```java
+loadUserByUsername(username)
+```
+
+Its responsibility is **only to fetch user details**.
+
+It does **not** verify passwords.
+
+---
+
+### 🗄️ Step 5 - Fetching User from Database
+
+Inside `loadUserByUsername()`,
+
+I use:
+
+```text
+UsersRepo
+```
+
+to query PostgreSQL.
+
+The repository searches the **users** table and returns a:
+
+```text
+Users
+```
+
+entity.
+
+---
+
+### 🔄 Step 6 - Converting Entity into UserDetails
+
+Spring Security cannot directly understand my `Users` entity.
+
+Instead, it expects an object implementing:
+
+```text
+UserDetails
+```
+
+Therefore, I created:
+
+```text
+UserPrincipal
+```
+
+which wraps the `Users` entity.
+
+Now Spring Security receives user information in the format it understands.
+
+---
+
+### ✅ Step 7 - Password Verification
+
+`MyUserDetailsService` returns the `UserPrincipal` object back to the:
+
+```text
+DaoAuthenticationProvider
+```
+
+Now the provider has everything it needs.
+
+It compares:
+
+- Password entered by the client
+- Password stored inside `UserPrincipal`
+
+using the configured:
+
+```text
+PasswordEncoder
+```
+
+---
+
+### 🎯 Step 8 - Authentication Result
+
+If both passwords match,
+
+✅ Authentication succeeds.
+
+The request is allowed to continue to the controller.
+
+Otherwise,
+
+❌ Spring Security rejects the request and returns an authentication error.
+
+---
+
+# 📌 Responsibility of Each Component
+
+| 🧩 Component | 🎯 Responsibility |
+|-------------|-------------------|
+| **Spring Security Filter Chain** | Intercepts every secured request before it reaches the controller. |
+| **AuthenticationManager** | Delegates authentication to the configured `AuthenticationProvider`. |
+| **DaoAuthenticationProvider** | Authenticates users by loading user details and verifying passwords. |
+| **MyUserDetailsService** | Loads user details based on the supplied username. |
+| **UsersRepo** | Fetches user information from the PostgreSQL database. |
+| **Users Entity** | Represents a row from the `users` table. |
+| **UserPrincipal** | Wraps the `Users` entity and converts it into a `UserDetails` object understood by Spring Security. |
+| **PasswordEncoder** | Compares the entered password with the stored password. |
+| **Controller** | Executes the requested API only after successful authentication. |
+
+---
+
+# 💡 Key Points to Remember
+
+> 🔹 `UserDetailsService` **loads** user details.
+
+> 🔹 `DaoAuthenticationProvider` **authenticates** users.
+
+> 🔹 `UsersRepo` **fetches** data from the database.
+
+> 🔹 `UserPrincipal` **adapts** the `Users` entity into a `UserDetails` object.
+
+> 🔹 `PasswordEncoder` **verifies** passwords.
+
+> 🔹 Only after successful authentication does the request reach the controller.
+
+---
+
+# 🧠 One-Line Summary
+
+> **Spring Security intercepts every secured request, asks `UserDetailsService` to load the user from the database, verifies the password using `DaoAuthenticationProvider` and `PasswordEncoder`, and only then allows the request to reach the controller.**
+
 Understanding this flow helped me connect all the interfaces and classes that initially seemed confusing.
 
 ---
