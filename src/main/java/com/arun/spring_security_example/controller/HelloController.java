@@ -1,4 +1,4 @@
-package com.arun.spring_security_example;
+package com.arun.spring_security_example.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;

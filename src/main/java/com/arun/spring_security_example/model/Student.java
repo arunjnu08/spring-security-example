@@ -1,4 +1,4 @@
-package com.arun.spring_security_example;
+package com.arun.spring_security_example.model;
 
 public class Student {
 
